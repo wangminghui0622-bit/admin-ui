@@ -1,0 +1,108 @@
+<template>
+  <TreeSelect
+    v-bind="getAttrs"
+    @change="handleChange"
+    @dropdown-visible-change="fetch"
+    :multiple="$props.multiple"
+  >
+    <template #[item]="data" v-for="item in Object.keys($slots)">
+      <slot :name="item" v-bind="data || {}"></slot>
+    </template>
+    <template #suffixIcon v-if="loading">
+      <LoadingOutlined spin />
+    </template>
+  </TreeSelect>
+</template>
+
+<script lang="ts" setup>
+  import { computed, watch, ref, onMounted, unref } from 'vue';
+  import { useAttrs } from '@vben/hooks';
+  import { TreeSelect } from 'ant-design-vue';
+  import { propTypes } from '@/utils/propTypes';
+  import { LoadingOutlined } from '@ant-design/icons-vue';
+  import { buildTreeNode } from '@/utils/tree';
+  import { isFunction, isArray } from 'remeda';
+  import { get } from '/@/utils/object';
+
+  const props = defineProps({
+    api: { type: Function as Function as PropType<(arg?: any) => Promise<any>> },
+    params: { type: Object },
+    immediate: { type: Boolean, default: true },
+    resultField: propTypes.string.def(''),
+    labelField: propTypes.string.def(''),
+    valueField: propTypes.string.def(''),
+    idKeyField: propTypes.string.def('id'),
+    parentKeyField: propTypes.string.def('parentId'),
+    childrenKeyField: propTypes.string.def('children'),
+    multiple: propTypes.bool.def(false),
+    defaultValue: { type: Object },
+  });
+
+  const emit = defineEmits(['options-change', 'change']);
+
+  const attrs = useAttrs();
+
+  const treeData = ref<Recordable[]>([]);
+  const isFirstLoaded = ref<Boolean>(false);
+  const loading = ref(false);
+
+  const getAttrs = computed(() => {
+    return {
+      ...(props.api ? { treeData: unref(treeData) } : {}),
+      ...attrs,
+    };
+  });
+
+  function handleChange(...args) {
+    emit('change', ...args);
+  }
+
+  watch(
+    () => props.params,
+    () => {
+      !unref(isFirstLoaded) && fetch();
+    },
+    { deep: true },
+  );
+
+  watch(
+    () => props.immediate,
+    (v) => {
+      v && !isFirstLoaded.value && fetch();
+    },
+  );
+
+  onMounted(() => {
+    props.immediate && fetch();
+  });
+
+  async function fetch() {
+    const { api } = props;
+    if (!api || !isFunction(api)) return;
+    loading.value = true;
+    treeData.value = [];
+    let result;
+    try {
+      result = await api(props.params);
+    } catch (e) {
+      console.error(e);
+    }
+    loading.value = false;
+    if (!result) return;
+    if (!isArray(result)) {
+      result = get(result, props.resultField);
+    }
+    treeData.value = buildTreeNode(result, {
+      idKeyField: props.idKeyField,
+      parentKeyField: props.parentKeyField,
+      childrenKeyField: props.childrenKeyField,
+      valueField: props.valueField,
+      labelField: props.labelField,
+      defaultValue: props.defaultValue,
+    });
+
+    emit('options-change', treeData.value);
+
+    isFirstLoaded.value = true;
+  }
+</script>

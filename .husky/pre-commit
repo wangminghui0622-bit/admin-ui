@@ -1,0 +1,7 @@
+#!/bin/sh
+PATH="/usr/local/bin:$PATH"
+
+pnpm run lint
+
+# Format and submit code according to lintstagedrc.js configuration
+# npm run lint
